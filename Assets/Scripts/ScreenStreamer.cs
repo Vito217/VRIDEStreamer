@@ -4,11 +4,12 @@ using System.Threading;
 using UnityEngine;
 using TMPro;
 using System;
+using System.Reflection;
 
 public class ScreenStreamer : MonoBehaviour
 {
     HttpListener listener;
-    //bool keepListening = true;
+    bool keepListening = true;
 
     string IP;
     int port = 5000;
@@ -16,12 +17,20 @@ public class ScreenStreamer : MonoBehaviour
     public TextMeshProUGUI hostname;
     public TextMeshProUGUI portnumber;
 
-    public static string path;
+    static Assembly common;
+    static Assembly primitives;
+    static int width;
+    static int height;
+    static string path;
 
     Thread mainThread;
 
     void Start()
     {
+        common = Assembly.Load("System.Drawing.Common");
+        primitives = Assembly.Load("System.Drawing.Primitives");
+        width = Screen.currentResolution.width;
+        height = Screen.currentResolution.height;
         path = Path.Combine(Application.persistentDataPath, "temp_capture.png");
 
         var host = Dns.GetHostEntry(Dns.GetHostName());
@@ -40,40 +49,61 @@ public class ScreenStreamer : MonoBehaviour
 
     void Listen()
     {
-        while (true)
+        while (keepListening)
         {
-            HttpListenerContext context = listener.GetContext();
-            HttpListenerRequest request = context.Request;
-            HttpListenerResponse response = context.Response;
+            var context = listener.BeginGetContext(new AsyncCallback(ListenerCallback), listener);
+            context.AsyncWaitHandle.WaitOne(1, true);
+        }
+    }
 
-            while (!IsFileReady(ScreenStreamer.path)) { }
-            byte[] buffer = File.ReadAllBytes(ScreenStreamer.path);
+    static void ListenerCallback(IAsyncResult result)
+    {
+        HttpListener listener = (HttpListener)result.AsyncState;
+        HttpListenerContext context = listener.EndGetContext(result);
+        HttpListenerRequest request = context.Request;
+        HttpListenerResponse response = context.Response;
 
+        try
+        {
+            Capture();
+            byte[] buffer = File.ReadAllBytes(path);
             response.ContentLength64 = buffer.Length;
-            Stream output = response.OutputStream;
-            output.Write(buffer, 0, buffer.Length);
-            output.Close();
+            response.OutputStream.Write(buffer, 0, buffer.Length);
+        }
+        catch
+        {
+
+        }
+        finally
+        {
+            response.OutputStream.Close();
         }
     }
 
     private void OnApplicationQuit()
     {
-        mainThread.Abort();
+        keepListening = false;
+        mainThread.Join();
         listener.Close();
     }
 
-    public static bool IsFileReady(string filename)
+    static void Capture()
     {
-        // If the file can be opened for exclusive access it means that the file
-        // is no longer locked by another process.
-        try
-        {
-            using (FileStream inputStream = File.Open(filename, FileMode.Open, FileAccess.Read, FileShare.None))
-                return inputStream.Length > 0;
-        }
-        catch (Exception)
-        {
-            return false;
-        }
+        Type size = primitives.GetType("System.Drawing.Size");
+        Type bitmap = common.GetType("System.Drawing.Bitmap");
+        Type graphics = common.GetType("System.Drawing.Graphics");
+
+        ConstructorInfo bitmapConstructor = bitmap.GetConstructor(new Type[] { typeof(int), typeof(int) });
+        object bmap = bitmapConstructor.Invoke(new object[] { width, height });
+
+        object g = graphics.GetMethod("FromImage").Invoke(null, new object[] { bmap });
+
+        ConstructorInfo sizeConstructor = size.GetConstructor(new Type[] { typeof(int), typeof(int) });
+        object s = sizeConstructor.Invoke(new object[] { width, height });
+
+        graphics.GetMethod("CopyFromScreen", new Type[] { typeof(int), typeof(int), typeof(int), typeof(int), size })
+            .Invoke(g, new object[] { 0, 0, 0, 0, s });
+
+        bitmap.GetMethod("Save", new Type[] { typeof(string) }).Invoke(bmap, new object[] { path });
     }
 }
