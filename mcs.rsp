@@ -1,0 +1,2 @@
+-r:System.Drawing.Primitives.dll
+-r:System.Drawing.Common.dll
