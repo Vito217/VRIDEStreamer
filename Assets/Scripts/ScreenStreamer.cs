@@ -18,21 +18,40 @@ public class ScreenStreamer : MonoBehaviour
     public TextMeshProUGUI hostname;
     public TextMeshProUGUI portnumber;
 
-    static Assembly common;
-    static Assembly primitives;
-    static int width;
-    static int height;
-    static string path;
-
     Thread mainThread;
+
+    static object imgf;
+    static string path;
+    static object bmp;
+    static object g;
+
+    static object[] copyParams;
+
+    static MethodInfo copyFromScreen;
+    static MethodInfo save;
 
     void Start()
     {
-        common = Assembly.Load("System.Drawing.Common");
-        primitives = Assembly.Load("System.Drawing.Primitives");
-        width = Screen.currentResolution.width;
-        height = Screen.currentResolution.height;
+        Assembly common = Assembly.Load("System.Drawing.Common");
+        Assembly primitives = Assembly.Load("System.Drawing.Primitives");
+        Type size = primitives.GetType("System.Drawing.Size");
+        Type bitmap = common.GetType("System.Drawing.Bitmap");
+        Type graphics = common.GetType("System.Drawing.Graphics");
+        Type imageFormat = common.GetType("System.Drawing.Imaging.ImageFormat");
+        int width = Screen.currentResolution.width;
+        int height = Screen.currentResolution.height;
+
         path = Path.Combine(Application.persistentDataPath, "temp_capture.png");
+
+        object s = size.GetConstructor(new Type[] { typeof(int), typeof(int) }).Invoke(new object[] { width, height });
+        bmp = bitmap.GetConstructor(new Type[] { typeof(int), typeof(int) }).Invoke(new object[] { width, height });
+        g = graphics.GetMethod("FromImage").Invoke(null, new object[] { bmp });
+        imgf = imageFormat.GetProperty("Png").GetValue(null);
+
+        copyFromScreen = graphics.GetMethod("CopyFromScreen", new Type[] { typeof(int), typeof(int), typeof(int), typeof(int), size });
+        save = bitmap.GetMethod("Save", new Type[] { typeof(Stream), imageFormat });
+
+        copyParams = new object[] { 0, 0, 0, 0, s };
 
         var host = Dns.GetHostEntry(Dns.GetHostName());
         IP = host.AddressList[host.AddressList.Length - 1].ToString();
@@ -66,14 +85,21 @@ public class ScreenStreamer : MonoBehaviour
 
         try
         {
-            Capture();
-            byte[] buffer = File.ReadAllBytes(path);
+            string requestData;
+
+            using (Stream body = request.InputStream)
+                using (var reader = new StreamReader(body, request.ContentEncoding))
+                    requestData = reader.ReadToEnd();
+
+            // Debug.Log(requestData);
+
+            byte[] buffer = Capture();
             response.ContentLength64 = buffer.Length;
             response.OutputStream.Write(buffer, 0, buffer.Length);
         }
-        catch
+        catch (Exception e)
         {
-
+            Debug.Log(e.Message);
         }
         finally
         {
@@ -88,24 +114,14 @@ public class ScreenStreamer : MonoBehaviour
         listener.Close();
     }
 
-    static void Capture()
+    static byte[] Capture()
     {
-        Type size = primitives.GetType("System.Drawing.Size");
-        Type bitmap = common.GetType("System.Drawing.Bitmap");
-        Type graphics = common.GetType("System.Drawing.Graphics");
-
-        ConstructorInfo bitmapConstructor = bitmap.GetConstructor(new Type[] { typeof(int), typeof(int) });
-        object bmap = bitmapConstructor.Invoke(new object[] { width, height });
-
-        object g = graphics.GetMethod("FromImage").Invoke(null, new object[] { bmap });
-
-        ConstructorInfo sizeConstructor = size.GetConstructor(new Type[] { typeof(int), typeof(int) });
-        object s = sizeConstructor.Invoke(new object[] { width, height });
-
-        graphics.GetMethod("CopyFromScreen", new Type[] { typeof(int), typeof(int), typeof(int), typeof(int), size })
-            .Invoke(g, new object[] { 0, 0, 0, 0, s });
-
-        bitmap.GetMethod("Save", new Type[] { typeof(string) }).Invoke(bmap, new object[] { path });
+        copyFromScreen.Invoke(g, copyParams);
+        using (var stream = new MemoryStream())
+        {
+            save.Invoke(bmp, new object[] { stream, imgf });
+            return stream.ToArray();
+        }
     }
 
     [Flags]
