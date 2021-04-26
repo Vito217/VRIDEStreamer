@@ -5,7 +5,6 @@ using UnityEngine;
 using TMPro;
 using System;
 using System.Reflection;
-using System.Runtime.InteropServices;
 
 public class ScreenStreamer : MonoBehaviour
 {
@@ -21,7 +20,6 @@ public class ScreenStreamer : MonoBehaviour
     Thread mainThread;
 
     static object imgf;
-    static string path;
     static object bmp;
     static object g;
 
@@ -40,8 +38,6 @@ public class ScreenStreamer : MonoBehaviour
         Type imageFormat = common.GetType("System.Drawing.Imaging.ImageFormat");
         int width = Screen.currentResolution.width;
         int height = Screen.currentResolution.height;
-
-        path = Path.Combine(Application.persistentDataPath, "temp_capture.png");
 
         object s = size.GetConstructor(new Type[] { typeof(int), typeof(int) }).Invoke(new object[] { width, height });
         bmp = bitmap.GetConstructor(new Type[] { typeof(int), typeof(int) }).Invoke(new object[] { width, height });
@@ -127,8 +123,8 @@ public class ScreenStreamer : MonoBehaviour
 
     static void EmulateMouseInteraction(string data)
     {
-        string[] parameters = data.Split(' ');
-        if(parameters[0].ToLower().Equals("true"))
+        string[] parameters = data.Split('.');
+        if(parameters[0].Equals("True"))
         {
             int x = int.Parse(parameters[1]);
             int y = int.Parse(parameters[2]);
