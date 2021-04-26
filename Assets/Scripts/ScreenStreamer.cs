@@ -123,8 +123,8 @@ public class ScreenStreamer : MonoBehaviour
 
     static void EmulateMouseInteraction(string data)
     {
-        string[] parameters = data.Split(' ');
-        if(parameters[0].ToLower().Equals("true"))
+        string[] parameters = data.Split('.');
+        if(parameters[0].Equals("True"))
         {
             int x = int.Parse(parameters[1]);
             int y = int.Parse(parameters[2]);
