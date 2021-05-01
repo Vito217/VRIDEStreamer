@@ -23,6 +23,7 @@ public class ScreenStreamer : MonoBehaviour
     Thread thread1;
     Thread thread2;
     Thread thread3;
+    Thread thread4;
 
     List<IntPtr> currentRunningWindows;
     IDictionary<IntPtr, string> windows;
@@ -41,48 +42,84 @@ public class ScreenStreamer : MonoBehaviour
         hostname.text = "host: " + IP;
         portnumber.text = "port: " + port;
 
-        thread1 = new Thread(RequestsThread);
-        thread2 = new Thread(DesktopThread);
-        thread3 = new Thread(ClicksThread);
+        thread1 = new Thread(DesktopThread);
         thread1.Start();
+
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+        thread2 = new Thread(RequestsThread);
         thread2.Start();
+
+        thread3 = new Thread(ClicksThread);
         thread3.Start();
+
+        thread4 = new Thread(KeypressThread);
+        thread4.Start();
+#endif
     }
 
     void Update()
     {
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         windows = WindowHandler.GetOpenWindows();
         foreach (IntPtr hwnd in windows.Keys)
             if (!currentRunningWindows.Contains(hwnd))
                 WindowThread(hwnd);
+#endif
     }
 
     private void OnApplicationQuit()
     {
         keepListening = false;
         thread1.Join();
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
         thread2.Join();
         thread3.Join();
-    }
-
-    static void EmulateMouseInteraction(string data)
-    {
-        string[] parameters = data.Split('.');
-        if(parameters[0].Equals("desktop"))
-        {
-            int x = int.Parse(parameters[1]);
-            int y = int.Parse(parameters[2]);
-            MouseModule.SetCursorPosition(x, y);
-            MouseModule.MouseClick();
-        }
-        else if (parameters[0].Equals("window"))
-        {
-
-        }
+        thread4.Join();
+# endif
     }
 
     // ------------------------------------------------------------------------------------------------------------------------------------
 
+    /// <summary>
+    /// Sends screenshots from the entire desktop
+    /// </summary>
+    void DesktopThread()
+    {
+        HttpListener listener = new HttpListener();
+        listener.Prefixes.Add("http://" + IP + ":" + port + "/desktop/");
+        listener.Start();
+
+        // Callback used for handling data
+        void ListenerCallback(IAsyncResult result)
+        {
+            HttpListener listener = (HttpListener)result.AsyncState;
+            HttpListenerContext context = listener.EndGetContext(result);
+            HttpListenerRequest request = context.Request;
+            HttpListenerResponse response = context.Response;
+
+            try
+            {
+                byte[] buffer = WindowHandler.PrintDesktop(width, height);
+                response.ContentLength64 = buffer.Length;
+                response.OutputStream.Write(buffer, 0, buffer.Length);
+            }
+            finally
+            {
+                response.OutputStream.Close();
+            }
+        }
+
+        while (keepListening)
+        {
+            var context = listener.BeginGetContext(new AsyncCallback(ListenerCallback), listener);
+            context.AsyncWaitHandle.WaitOne(1, true);
+        }
+
+        listener.Close();
+    }
+
+    // ------------------------------------------------------------------------------------------------------------------------------------
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
     /// <summary>
     /// Recieves requests from the user. It returns a list with the names of the windows
     /// </summary>
@@ -129,60 +166,14 @@ public class ScreenStreamer : MonoBehaviour
     // ------------------------------------------------------------------------------------------------------------------------------------
 
     /// <summary>
-    /// Sends screenshots from the entire desktop
-    /// </summary>
-    void DesktopThread()
-    {
-        object bmp = WindowHandler.NewBitmap(width, height);
-        object g = WindowHandler.NewGraphics(bmp);
-        object s = WindowHandler.NewSize(width, height);
-        object[] copyParams = new object[] { 0, 0, 0, 0, s };
-
-        HttpListener listener = new HttpListener();
-        listener.Prefixes.Add("http://" + IP + ":" + port + "/desktop/");
-        listener.Start();
-
-        // Callback used for handling data
-        void ListenerCallback(IAsyncResult result)
-        {
-            HttpListener listener = (HttpListener)result.AsyncState;
-            HttpListenerContext context = listener.EndGetContext(result);
-            HttpListenerRequest request = context.Request;
-            HttpListenerResponse response = context.Response;
-
-            try
-            {
-                WindowHandler.CopyFromScreen(g, copyParams);
-                byte[] buffer = WindowHandler.BitmapToArray(bmp);
-                response.ContentLength64 = buffer.Length;
-                response.OutputStream.Write(buffer, 0, buffer.Length);
-            }
-            finally
-            {
-                response.OutputStream.Close();
-            }
-        }
-
-        while (keepListening)
-        {
-            var context = listener.BeginGetContext(new AsyncCallback(ListenerCallback), listener);
-            context.AsyncWaitHandle.WaitOne(1, true);
-        }
-
-        WindowHandler.DisposeGraphics(g);
-        listener.Close();
-    }
-
-    // ------------------------------------------------------------------------------------------------------------------------------------
-
-    /// <summary>
     /// Sends screenshots from a window
     /// </summary>
     async void WindowThread(IntPtr hwnd)
     {
-        currentRunningWindows.Add(hwnd);
         await Task.Run(() => 
         {
+            currentRunningWindows.Add(hwnd);
+
             HttpListener listener = new HttpListener();
             listener.Prefixes.Add("http://" + IP + ":" + port + "/" + hwnd.ToString() + "/");
             listener.Start();
@@ -197,7 +188,7 @@ public class ScreenStreamer : MonoBehaviour
 
                 try
                 {
-                    byte[] buffer = WindowHandler.BitmapToArray(WindowHandler.PrintWindow(hwnd));
+                    byte[] buffer = WindowHandler.PrintWindow(hwnd);
                     response.ContentLength64 = buffer.Length;
                     response.OutputStream.Write(buffer, 0, buffer.Length);
                 }
@@ -214,9 +205,10 @@ public class ScreenStreamer : MonoBehaviour
             }
 
             listener.Close();
+
+            currentRunningWindows.Remove(hwnd);
         }
         );
-        currentRunningWindows.Remove(hwnd);
     }
 
     // ------------------------------------------------------------------------------------------------------------------------------------
@@ -225,7 +217,7 @@ public class ScreenStreamer : MonoBehaviour
     /// Recieves requests from the user. It returns a list with the names of the windows.
     /// Data will be the following:
     /// 
-    ///     (desktop or window).(hwnd).(X Coord).(Y Coord)
+    ///     (hwnd).(X Coord).(Y Coord)
     /// 
     /// </summary>
     void ClicksThread()
@@ -244,16 +236,19 @@ public class ScreenStreamer : MonoBehaviour
 
             try
             {
-                /**
-                string requestData;
+                using Stream body = request.InputStream;
+                using var reader = new StreamReader(body, request.ContentEncoding);
+                string requestData = reader.ReadToEnd();
+                string[] parameters = requestData.Split('.');
 
-                using (Stream body = request.InputStream)
-                using (var reader = new StreamReader(body, request.ContentEncoding))
-                    requestData = reader.ReadToEnd();
+                string hwnd = parameters[0];
+                int x = int.Parse(parameters[1]);
+                int y = int.Parse(parameters[2]);
 
-                if (!String.IsNullOrWhiteSpace(requestData))
-                    EmulateMouseInteraction(requestData);
-                **/
+                if (hwnd.Equals("desktop"))
+                    WindowHandler.ClickDesktop(x, y);
+                else
+                    WindowHandler.ClickWindow(new IntPtr(Convert.ToInt32(hwnd)), x, y);
             }
             finally
             {
@@ -270,4 +265,56 @@ public class ScreenStreamer : MonoBehaviour
 
         listener.Close();
     }
+
+    // ------------------------------------------------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Recieves key presses from the user as:
+    /// 
+    ///     (hwnd).(keycode)
+    /// 
+    /// </summary>
+    void KeypressThread()
+    {
+        // Creating new listener
+        HttpListener listener = new HttpListener();
+        listener.Prefixes.Add("http://" + IP + ":" + port + "/keypress/");
+        listener.Start();
+
+        void RequestsCallback(IAsyncResult result)
+        {
+            HttpListener listener = (HttpListener)result.AsyncState;
+            HttpListenerContext context = listener.EndGetContext(result);
+            HttpListenerRequest request = context.Request;
+            HttpListenerResponse response = context.Response;
+
+            try
+            {
+                using Stream body = request.InputStream;
+                using var reader = new StreamReader(body, request.ContentEncoding);
+                string requestData = reader.ReadToEnd();
+                string[] parameters = requestData.Split('.');
+
+                string hwnd = parameters[0];
+                int keycode = int.Parse(parameters[1]);
+
+                if (hwnd != "desktop")
+                    KeyboardModule.PressKey(new IntPtr(Convert.ToInt32(hwnd)), keycode);
+            }
+            finally
+            {
+                response.OutputStream.Close();
+            }
+        }
+
+        // Main loop
+        while (keepListening)
+        {
+            var context = listener.BeginGetContext(new AsyncCallback(RequestsCallback), listener);
+            context.AsyncWaitHandle.WaitOne(1, true);
+        }
+
+        listener.Close();
+    }
+#endif
 }
