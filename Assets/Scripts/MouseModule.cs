@@ -1,9 +1,10 @@
 ﻿using System;
 using System.Runtime.InteropServices;
-using System.Windows;
 
 public static class MouseModule
 {
+#if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+
     [Flags]
     public enum MouseEventFlags
     {
@@ -76,4 +77,6 @@ public static class MouseModule
             Y = y;
         }
     }
+
+#endif
 }
