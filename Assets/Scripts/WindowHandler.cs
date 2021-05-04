@@ -91,6 +91,7 @@ public static class WindowHandler
 
     public static byte[] PrintWindow(IntPtr hwnd)
     {
+        // First, we maximize window
         uint SW_RESTORE = 0x09;
         ShowWindow(hwnd, SW_RESTORE);
 
@@ -111,19 +112,8 @@ public static class WindowHandler
 
     public static void ClickWindow(IntPtr hwnd, int relXPos, int relYpos)
     {
-        // First, we maximize window
-        uint SW_RESTORE = 0x09;
-        ShowWindow(hwnd, SW_RESTORE);
+        SetWindowAsTopMost(hwnd);
 
-        // We set window to topmost position
-        //IntPtr HWND_TOPMOST = new IntPtr(-1);
-        IntPtr HWND_TOP = new IntPtr(0);
-        const UInt32 SWP_NOSIZE = 0x0001;
-        const UInt32 SWP_NOMOVE = 0x0002;
-        const UInt32 SWP_SHOWWINDOW = 0x0040;
-        SetWindowPos(hwnd, HWND_TOP, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
-
-        // We calculate the desktop screen position
         RECT rc;
         GetWindowRect(hwnd, out rc);
         int worldXpos = rc.Left + relXPos;
@@ -136,6 +126,20 @@ public static class WindowHandler
     {
         MouseModule.SetCursorPosition(xPos, yPos);
         MouseModule.MouseClick();
+    }
+    public static void SetWindowAsTopMost(IntPtr hwnd)
+    {
+        // First, we maximize window
+        uint SW_RESTORE = 0x09;
+        ShowWindow(hwnd, SW_RESTORE);
+
+        // We set window to topmost position
+        IntPtr HWND_TOPMOST = new IntPtr(-1);
+        //IntPtr HWND_TOP = new IntPtr(0);
+        const UInt32 SWP_NOSIZE = 0x0001;
+        const UInt32 SWP_NOMOVE = 0x0002;
+        const UInt32 SWP_SHOWWINDOW = 0x0040;
+        SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
     }
 #endif
 

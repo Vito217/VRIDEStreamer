@@ -30,7 +30,6 @@ public class ScreenStreamer : MonoBehaviour
 
     void Start()
     {
-        windows = WindowHandler.GetOpenWindows();
         width = Screen.currentResolution.width;
         height = Screen.currentResolution.height;
         currentRunningWindows = new List<IntPtr>();
@@ -46,6 +45,8 @@ public class ScreenStreamer : MonoBehaviour
         thread1.Start();
 
 #if UNITY_EDITOR_WIN || UNITY_STANDALONE_WIN
+
+        windows = WindowHandler.GetOpenWindows();
         thread2 = new Thread(RequestsThread);
         thread2.Start();
 
@@ -170,10 +171,9 @@ public class ScreenStreamer : MonoBehaviour
     /// </summary>
     async void WindowThread(IntPtr hwnd)
     {
+        currentRunningWindows.Add(hwnd);
         await Task.Run(() => 
         {
-            currentRunningWindows.Add(hwnd);
-
             HttpListener listener = new HttpListener();
             listener.Prefixes.Add("http://" + IP + ":" + port + "/" + hwnd.ToString() + "/");
             listener.Start();
@@ -205,10 +205,9 @@ public class ScreenStreamer : MonoBehaviour
             }
 
             listener.Close();
-
-            currentRunningWindows.Remove(hwnd);
         }
         );
+        currentRunningWindows.Remove(hwnd);
     }
 
     // ------------------------------------------------------------------------------------------------------------------------------------
