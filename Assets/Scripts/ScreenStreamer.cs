@@ -10,7 +10,8 @@ using System.IO;
 
 public class ScreenStreamer : MonoBehaviour
 {
-    public static Dictionary<string, int> winCharKeycodes = new Dictionary<string, int>() {
+    public static Dictionary<string, int> winKeycodes = new Dictionary<string, int>() 
+    {
         { "a", 0x41 }, { "b", 0x42 }, { "c", 0x43 }, { "d", 0x44 }, { "e", 0x45 },
         { "f", 0x46 }, { "g", 0x47 }, { "h", 0x48 }, { "i", 0x49 }, { "j", 0x4A },
         { "k", 0x4B }, { "l", 0x4C }, { "m", 0x4D }, { "n", 0x4E }, { "o", 0x4F },
@@ -24,16 +25,26 @@ public class ScreenStreamer : MonoBehaviour
         { "P", 0x50 | 0xA1 }, { "Q", 0x51 | 0xA1 }, { "R", 0x52 | 0xA1 }, { "S", 0x53 | 0xA1 }, { "T", 0x54 | 0xA1 },
         { "U", 0x55 | 0xA1 }, { "V", 0x56 | 0xA1 }, { "W", 0x57 | 0xA1 }, { "X", 0x58 | 0xA1 }, { "Y", 0x59 | 0xA1 },
         { "Z", 0x5A | 0xA1 },
-    };
 
-    public static Dictionary<string, int> winNumKeycodes = new Dictionary<string, int>() {
+
         { "0", 0x30 }, { "1", 0x31 }, { "2", 0x32 }, { "3", 0x33 }, { "4", 0x34 },
         { "5", 0x35 }, { "6", 0x36 }, { "7", 0x37 }, { "8", 0x38 }, { "9", 0x39 },
-    };
 
-    public static Dictionary<string, int> winSpecialKeycodes = new Dictionary<string, int>() {
         { "enter", 0x0D }, { "ENTER", 0x0D },
         { "back", 0x08 }, { "BACK", 0x08 },
+        { "up", 0x26 }, { "UP", 0x26 },
+        { "down", 0x28 }, { "DOWN", 0x28 },
+        { "left", 0x25 }, { "LEFT", 0x25 },
+        { "right", 0x27 }, { "RIGHT", 0x27 },
+        { "tab", 0x09 }, { "TAB", 0x09 },
+        { "del", 0x2E }, { "DEL", 0x2E },
+
+        { " ", 0x20 }, { "*", 0x6A }, { "+", 0xBB }, { "-", 0xBD }, { "/", 0x6F }, { "," , 0xBC }, { ".", 0xBE },
+
+        { "copy", 0xA2 | 0x43 }, { "COPY", 0xA2 | 0x43 },
+        { "paste", 0xA2 | 0x56 }, { "PASTE", 0xA2 | 0x56 },
+        { "select all", 0xA2 | 0x41 }, { "SELECT ALL", 0xA2 | 0x41 }
+
     };
 
     bool keepListening = true;
@@ -326,21 +337,9 @@ public class ScreenStreamer : MonoBehaviour
                 if (hwnd != "desktop")
                 {
                     // Case 1: this is an alphabetical character
-                    if (winCharKeycodes.ContainsKey(character))
+                    if (winKeycodes.ContainsKey(character))
                     {
-                        int keycode = winCharKeycodes[character];
-                        KeyboardModule.PressKey(new IntPtr(Convert.ToInt32(hwnd)), keycode);
-                    }
-
-                    else if (winNumKeycodes.ContainsKey(character))
-                    {
-                        int keycode = winNumKeycodes[character];
-                        KeyboardModule.PressKey(new IntPtr(Convert.ToInt32(hwnd)), keycode);
-                    }
-
-                    else if (winSpecialKeycodes.ContainsKey(character))
-                    {
-                        int keycode = winSpecialKeycodes[character];
+                        int keycode = winKeycodes[character];
                         KeyboardModule.PressKey(new IntPtr(Convert.ToInt32(hwnd)), keycode);
                     }
                 }
