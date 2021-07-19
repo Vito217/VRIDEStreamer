@@ -10,6 +10,43 @@ using System.IO;
 
 public class ScreenStreamer : MonoBehaviour
 {
+    public static Dictionary<string, int> winKeycodes = new Dictionary<string, int>() 
+    {
+        { "a", 0x41 }, { "b", 0x42 }, { "c", 0x43 }, { "d", 0x44 }, { "e", 0x45 },
+        { "f", 0x46 }, { "g", 0x47 }, { "h", 0x48 }, { "i", 0x49 }, { "j", 0x4A },
+        { "k", 0x4B }, { "l", 0x4C }, { "m", 0x4D }, { "n", 0x4E }, { "o", 0x4F },
+        { "p", 0x50 }, { "q", 0x51 }, { "r", 0x52 }, { "s", 0x53 }, { "t", 0x54 },
+        { "u", 0x55 }, { "v", 0x56 }, { "w", 0x57 }, { "x", 0x58 }, { "y", 0x59 },
+        { "z", 0x5A },
+
+        { "A", 0x41 | 0xA1 }, { "B", 0x42 | 0xA1 }, { "C", 0x43 | 0xA1 }, { "D", 0x44 | 0xA1 }, { "E", 0x45 | 0xA1 },
+        { "F", 0x46 | 0xA1 }, { "G", 0x47 | 0xA1 }, { "H", 0x48 | 0xA1 }, { "I", 0x49 | 0xA1 }, { "J", 0x4A | 0xA1 },
+        { "K", 0x4B | 0xA1 }, { "L", 0x4C | 0xA1 }, { "M", 0x4D | 0xA1 }, { "N", 0x4E | 0xA1 }, { "O", 0x4F | 0xA1 },
+        { "P", 0x50 | 0xA1 }, { "Q", 0x51 | 0xA1 }, { "R", 0x52 | 0xA1 }, { "S", 0x53 | 0xA1 }, { "T", 0x54 | 0xA1 },
+        { "U", 0x55 | 0xA1 }, { "V", 0x56 | 0xA1 }, { "W", 0x57 | 0xA1 }, { "X", 0x58 | 0xA1 }, { "Y", 0x59 | 0xA1 },
+        { "Z", 0x5A | 0xA1 },
+
+
+        { "0", 0x30 }, { "1", 0x31 }, { "2", 0x32 }, { "3", 0x33 }, { "4", 0x34 },
+        { "5", 0x35 }, { "6", 0x36 }, { "7", 0x37 }, { "8", 0x38 }, { "9", 0x39 },
+
+        { "enter", 0x0D }, { "ENTER", 0x0D },
+        { "back", 0x08 }, { "BACK", 0x08 },
+        { "up", 0x26 }, { "UP", 0x26 },
+        { "down", 0x28 }, { "DOWN", 0x28 },
+        { "left", 0x25 }, { "LEFT", 0x25 },
+        { "right", 0x27 }, { "RIGHT", 0x27 },
+        { "tab", 0x09 }, { "TAB", 0x09 },
+        { "del", 0x2E }, { "DEL", 0x2E },
+
+        { " ", 0x20 }, { "*", 0x6A }, { "+", 0xBB }, { "-", 0xBD }, { "/", 0x6F }, { "," , 0xBC }, { ".", 0xBE },
+
+        { "copy", 0xA2 | 0x43 }, { "COPY", 0xA2 | 0x43 },
+        { "paste", 0xA2 | 0x56 }, { "PASTE", 0xA2 | 0x56 },
+        { "select all", 0xA2 | 0x41 }, { "SELECT ALL", 0xA2 | 0x41 }
+
+    };
+
     bool keepListening = true;
 
     string IP;
@@ -270,7 +307,7 @@ public class ScreenStreamer : MonoBehaviour
     /// <summary>
     /// Recieves key presses from the user as:
     /// 
-    ///     (hwnd).(keycode)
+    ///     (hwnd).(character)
     /// 
     /// </summary>
     void KeypressThread()
@@ -295,10 +332,17 @@ public class ScreenStreamer : MonoBehaviour
                 string[] parameters = requestData.Split('.');
 
                 string hwnd = parameters[0];
-                int keycode = int.Parse(parameters[1]);
+                string character = parameters[1];
 
                 if (hwnd != "desktop")
-                    KeyboardModule.PressKey(new IntPtr(Convert.ToInt32(hwnd)), keycode);
+                {
+                    // Case 1: this is an alphabetical character
+                    if (winKeycodes.ContainsKey(character))
+                    {
+                        int keycode = winKeycodes[character];
+                        KeyboardModule.PressKey(new IntPtr(Convert.ToInt32(hwnd)), keycode);
+                    }
+                }
             }
             finally
             {
